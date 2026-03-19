@@ -2588,34 +2588,49 @@ async function submitLBScore(){
 
 async function renderLB(){
   const p=document.getElementById('lb-list');if(!p)return;
-  updateBinIdDisplay();
   p.innerHTML='<div style="text-align:center;color:#3a6888;font-size:.7rem;padding:20px;letter-spacing:1px;">⏳ LOADING...</div>';
-  await submitLBScore();
-  const entries=await fetchLB();
-  if(!entries||!entries.length){
-    p.innerHTML='<div style="text-align:center;color:#3a6888;font-size:.7rem;padding:20px;">No scores yet. Be the first! 🥇</div>';
-    return;
+  // Force fresh fetch - bypass cache
+  lbCache=null;lbCacheTime=0;
+  try{
+    const r=await fetch(`${FB_DB_URL}${FB_LB_PATH}.json?t=${Date.now()}`);
+    const data=await r.json();
+    if(!data||typeof data!=='object'){
+      p.innerHTML='<div style="text-align:center;color:#3a6888;font-size:.7rem;padding:20px;">No scores yet. Be the first! 🥇</div>';
+      return;
+    }
+    const entries=[];
+    for(const key of Object.keys(data)){
+      const e=data[key];
+      if(e&&e.name)entries.push(e);
+    }
+    entries.sort((a,b)=>b.score-a.score);
+    if(!entries.length){
+      p.innerHTML='<div style="text-align:center;color:#3a6888;font-size:.7rem;padding:20px;">No scores yet. Be the first! 🥇</div>';
+      return;
+    }
+    p.innerHTML='';
+    const lu=document.getElementById('lb-last-update');
+    if(lu)lu.textContent='Updated: '+new Date().toLocaleTimeString();
+    const rankColors=['gold','silver','bronze'];
+    entries.slice(0,LB_MAX).forEach((e,i)=>{
+      const isMe=e.name===PLAYER_NAME;
+      const rank=i+1;
+      const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
+      const d=document.createElement('div');
+      d.className='lb-row'+(isMe?' me':'');
+      d.innerHTML=`
+        <div class="lb-rank ${rankColors[i]||'other'}">${medal||rank}</div>
+        <div class="lb-info">
+          <div class="lb-name">${e.name}${isMe?'<span class="lb-me-badge">YOU</span>':''}</div>
+          <div class="lb-score">Prestige ${e.prestige||0} | ${new Date(e.ts).toLocaleDateString()}</div>
+        </div>
+        <div class="lb-val">${fmt(e.score||0)} ⚡</div>
+      `;
+      p.appendChild(d);
+    });
+  }catch(err){
+    p.innerHTML='<div style="text-align:center;color:#ff1744;font-size:.7rem;padding:20px;">Error loading. Check connection.</div>';
   }
-  p.innerHTML='';
-  const lu=document.getElementById('lb-last-update');
-  if(lu)lu.textContent='Updated: '+new Date().toLocaleTimeString();
-  const rankColors=['gold','silver','bronze'];
-  entries.forEach((e,i)=>{
-    const isMe=e.name===PLAYER_NAME;
-    const rank=i+1;
-    const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
-    const d=document.createElement('div');
-    d.className='lb-row'+(isMe?' me':'');
-    d.innerHTML=`
-      <div class="lb-rank ${rankColors[i]||'other'}">${medal||rank}</div>
-      <div class="lb-info">
-        <div class="lb-name">${e.name}${isMe?'<span class="lb-me-badge">YOU</span>':''}</div>
-        <div class="lb-score">Prestige ${e.prestige} | ${new Date(e.ts).toLocaleDateString()}</div>
-      </div>
-      <div class="lb-val">${fmt(e.score)} ⚡</div>
-    `;
-    p.appendChild(d);
-  });
 }
 
 let lbAutoRefresh=null;
